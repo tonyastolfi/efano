@@ -27,7 +27,7 @@ i.e., when a "hole" in collected data is suspected.
 
 ## Details
 
-Both filter types are implemented using the XXH3 hash function family.
+Both filter types are implemented using the [XXH3 hash function family](https://github.com/Cyan4973/xxHash).
 For the Bloom Filter, which requires `k` hash functions, we generate
 `k` distinct random seeds; for Elias-Fano, which only requires a
 single hash per inserted item, we use the default seed value (`0`).
