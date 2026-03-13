@@ -1,6 +1,6 @@
-#include <efano/elias_fano_filter.hpp>
+#include <efano/efano.hpp>
 //
-#include <efano/elias_fano_filter.hpp>
+#include <efano/efano.hpp>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>

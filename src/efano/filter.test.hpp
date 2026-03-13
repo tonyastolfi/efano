@@ -3,6 +3,8 @@
 
 #include <efano/import/int_types.hpp>
 
+#include <batteries/seq.hpp>
+
 #include <random>
 #include <unordered_set>
 #include <vector>
@@ -25,8 +27,9 @@ std::vector<u64> generate_keys(RNG& rng, usize n)
 
 struct Result {
     double n;
-    std::vector<double> bits_per_key;
-    std::vector<double> false_rate;
+    double target_bit_rate;
+    double actual_bit_rate;
+    double error_rate;
 };
 
 template <typename FilterT, typename RNG>
@@ -35,12 +38,8 @@ void run_filter_test(RNG& rng, std::ostream& out)
     std::vector<u64> keys = generate_keys(rng, 1000000);
 
     std::vector<Result> results;
-    usize h = 0;
 
     for (usize n : {5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 100, 125, 150, 175, 200}) {
-        Result& r = results.emplace_back();
-        r.n = n;
-
         std::unordered_set<u64> filter_keys;
         for (const u64& key : keys) {
             filter_keys.emplace(key);
@@ -75,29 +74,48 @@ void run_filter_test(RNG& rng, std::ostream& out)
                 }
             }
 
-            r.bits_per_key.emplace_back(filter.actual_bits_per_key());
-            r.false_rate.emplace_back(false_count / query_count);
+            results.emplace_back(Result{
+                .n = (double)n,
+                .target_bit_rate = bits_per_key,
+                .actual_bit_rate = filter.actual_bits_per_key(),
+                .error_rate = false_count / query_count,
+            });
         }
-
-        h = std::max(h, r.bits_per_key.size());
-
-        BATT_CHECK_EQ(r.bits_per_key.size(), r.false_rate.size());
     }
 
-    out << "bits";
-    for (const Result& r : results) {
-        out << ",fpr(N=" << r.n << ")";
+    std::sort(results.begin(), results.end(), [](const Result& l, const Result& r) {
+        return l.target_bit_rate < r.target_bit_rate || (l.target_bit_rate == r.target_bit_rate && l.n < r.n);
+    });
+
+    double prev_n = -1;
+    for (Result& r : results) {
+        if (r.n < prev_n) {
+            break;
+        }
+        if (r.n != prev_n) {
+            out << "bits,fpr(N=" << r.n << "),";
+            prev_n = r.n;
+        }
     }
     out << std::endl;
 
-    for (usize i = 0; i < h; ++i) {
-        for (const Result& r : results) {
-            if (&r == &(results.front())) {
-                out << r.bits_per_key[i];
-            }
-            out << "," << r.false_rate[i];
+    std::set<i64> actual_bit_rates;
+    prev_n = -1;
+    for (const Result& r : results) {
+        if (r.n < prev_n) {
+            out << std::endl;
         }
-        out << std::endl;
+        prev_n = r.n;
+        out << r.actual_bit_rate << "," << r.error_rate << ",";
+        actual_bit_rates.emplace(r.actual_bit_rate * 1024.0);
+    }
+    out << std::endl;
+
+    out << std::endl << "bits,expected(Bloom)" << std::endl;
+    const double base = std::pow(2.0, (-1.0 / std::log2(std::exp(1))));
+    for (i64 rate_1024 : actual_bit_rates) {
+        double rate = (double)rate_1024 / 1024.0;
+        out << rate << "," << std::pow(base, rate) << std::endl;
     }
 }
 

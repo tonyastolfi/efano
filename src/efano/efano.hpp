@@ -23,8 +23,21 @@ struct EliasFanoFilter {
 
     //+++++++++++-+-+--+----- --- -- -  -  -   -
 
+    /** \brief Whether the `items_` vector is currently sorted (we sort lazily).
+     */
     bool sorted_ = false;
+
+    /** \brief The number of keys inserted into the filter; this may be greater than
+     * `this->items_.size()` since hash/fingerprint collisions may occur during insertion.
+     */
+    usize inserted_ = 0;
+
+    /** \brief The (unpacked) item fingerprints.
+     */
     std::vector<u64> items_;
+
+    /** \brief A low-order bit mask; this represents the size of a fingerprint.
+     */
     u64 mask_;
 
     //+++++++++++-+-+--+----- --- -- -  -  -   -
@@ -49,11 +62,46 @@ struct EliasFanoFilter {
 
     double actual_bits_per_key() const
     {
-        const i32 implicit_bits = batt::log2_ceil(this->items_.size());
-        const i32 stored_bits = batt::bit_count(this->mask_);
-        const i32 explicit_bits = std::max(0, stored_bits - implicit_bits);
+        // The number of bits implicitly stored via key sort order.
+        //
+        const i64 implicit_bits = batt::log2_ceil(this->items_.size());
 
-        return 2.0 + (double)explicit_bits;
+        // The number of bits stored per key, explicitly and implicitly.
+        //
+        const i64 stored_bits = batt::bit_count(this->mask_);
+
+        // The number of low-order remainder bits explicitly stored per key.
+        //
+        const i64 explicit_bits = std::max<i64>(0, stored_bits - implicit_bits);
+
+        // The total packed size (bits) per fingerprint; we need 2 bits to store a unary
+        // array of how many fingerprints there are per fingerprint high-order bits value.
+        //
+        const i64 packed_bits_per_item = 2 + explicit_bits;
+
+        // The total number of bits this filter requires.
+        //
+        const i64 packed_bits = packed_bits_per_item * this->items_.size();
+
+        // Packed byte size.
+        //
+        const i64 packed_bytes = (packed_bits + 7) / 8;
+
+        if (this->items_.size() < this->inserted_) {
+            std::cerr << "insert collisions detected: " << (this->inserted_ - this->items_.size())
+                      << std::endl;
+        }
+
+        // Actual bit rate.
+        //
+        return 8.0 * (double)packed_bytes / (double)this->inserted_;
+    }
+
+    void clear()
+    {
+        this->sorted_ = true;
+        this->items_.clear();
+        this->inserted_ = 0;
     }
 
     void sort_if_needed()
@@ -62,7 +110,6 @@ struct EliasFanoFilter {
             std::sort(this->items_.begin(), this->items_.end());
             this->items_.erase(std::unique(this->items_.begin(), this->items_.end()), this->items_.end());
             this->sorted_ = true;
-            std::cerr << "sorted! " << BATT_INSPECT(this->dump()) << std::endl;
         }
     }
 
@@ -73,6 +120,7 @@ struct EliasFanoFilter {
 
     void insert(const void* key_data, usize key_size)
     {
+        ++this->inserted_;
         const u64 hash_val = this->get_hash(key_data, key_size);
         this->sorted_ = this->items_.empty() || (this->sorted_ && (hash_val > this->items_.back()));
         this->items_.emplace_back(hash_val);
