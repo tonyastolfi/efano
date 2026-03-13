@@ -9,7 +9,8 @@ enumerate its members)?
 
 The answer is yes;
 [Elias-Fano](https://www.antoniomallia.it/sorted-integers-compression-with-elias-fano-encoding.html)
-is a superior representation in terms of accuracy-per-space:
+is a superior representation, if judged solely in terms of
+accuracy-per-space:
 
 <table border='0'><tr>
 <td width='50%'><img width='100%' src='images/bloom-filter-result.png'></td>
