@@ -59,6 +59,11 @@ struct BloomFilter {
         this->words.resize(std::ceil((double)n * bits_per_key / (double)kBitsPerWord));
     }
 
+    const char* dump() const
+    {
+        return "TODO [tastolfi 2026-03-13] ";
+    }
+
     double actual_bits_per_key() const
     {
         return (double)kBitsPerWord * (double)this->words.size() / (double)this->key_count;
